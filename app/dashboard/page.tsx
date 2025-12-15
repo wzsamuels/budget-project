@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { DollarSign, Percent, TrendingUp, TrendingDown } from "lucide-react";
+import { OverviewChart } from "@/components/dashboard/overview-chart";
 
 async function getDashboardData(userId: string) {
     const now = new Date();
@@ -48,29 +49,65 @@ async function getDashboardData(userId: string) {
         ? (preTaxSavingsYTD / grossIncomeYTD) * 100
         : 0;
 
-    // Monthly Cash Flow
-    // Income: Net Pay from Paychecks this month + Income Transactions
-    // Expenses: Expense Transactions this month
+    // Monthly Data Aggregation
+    const monthlyData = new Array(12).fill(0).map((_, i) => ({
+        name: new Date(0, i).toLocaleString('default', { month: 'short' }),
+        gross: 0,
+        tax: 0,
+        expense: 0
+    }));
 
-    const paychecksMonth = paychecksYTD.filter(p => p.payDate >= startOfMonth.toISOString().split("T")[0]);
-    const monthNetPay = paychecksMonth.reduce((acc, p) => acc + p.netAmount, 0);
+    // Add Paychecks to Monthly Data AND calculate monthly cash flow
+    let monthIncome = 0;
 
-    // Fetch transactions (assuming transactions model exists and is populated, though we haven't built the UI for it yet)
-    // For now, using 0 for transactions context if table empty
-    // Actually I need to fetch transactions.
+    paychecksYTD.forEach(p => {
+        const month = new Date(p.payDate).getMonth();
+        const gross = p.grossAmount / 100;
+        const tax = p.deductions
+            .filter(d => d.category === 'TAX')
+            .reduce((sum, d) => sum + d.amount, 0) / 100;
 
-    /* 
-    const txMonth = await db.query.transactions.findMany({
+        monthlyData[month].gross += gross;
+        monthlyData[month].tax += tax;
+
+        // Calculate specific month income for the card
+        if (p.payDate >= startOfMonth.toISOString().split("T")[0]) {
+            monthIncome += p.netAmount; // Keep in cents for consistency with existing vars
+        }
+    });
+
+    // Fetch Transactions YTD
+    const transactionsYTD = await db.query.transactions.findMany({
         where: and(
             eq(transactions.userId, userId),
-            gte(transactions.date, startOfMonth.toISOString().split("T")[0])
+            gte(transactions.date, startOfYear.toISOString().split("T")[0])
         )
     });
-    */
-    // Since we haven't set up the query helper for transactions fully or seed data, I'll stick to paychecks data for now.
 
-    const monthIncome = monthNetPay; // + txMonth.filter(t => t.type === 'INCOME').sum
-    const monthExpenses = 0; // txMonth.filter(t => t.type === 'EXPENSE').sum
+    let monthExpenses = 0;
+
+    transactionsYTD.forEach(t => {
+        const month = new Date(t.date).getMonth();
+        const amount = t.amount / 100; // convert to dollars
+
+        if (t.type === 'INCOME') {
+            // Treat income transactions as gross adjustment for now, or ignore for chart?
+            // User specifically asked for "gross pay" vs "tax". Income txs are likely net.
+            // Let's add income transactions to gross for visualizing "Money In".
+            monthlyData[month].gross += amount;
+        } else if (t.type === 'EXPENSE') {
+            monthlyData[month].expense += amount;
+        }
+
+        // Calculate specific month expenses for the card
+        if (t.date >= startOfMonth.toISOString().split("T")[0]) {
+            if (t.type === 'INCOME') {
+                monthIncome += t.amount;
+            } else if (t.type === 'EXPENSE') {
+                monthExpenses += t.amount;
+            }
+        }
+    });
 
     const cashFlow = monthIncome - monthExpenses;
 
@@ -80,7 +117,8 @@ async function getDashboardData(userId: string) {
         savingsRate,
         monthIncome,
         monthExpenses,
-        cashFlow
+        cashFlow,
+        overviewData: monthlyData
     };
 }
 
@@ -104,10 +142,10 @@ export default async function DashboardPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Cash Flow (Month)</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-income" />
+                        <TrendingUp className="h-4 w-4 text-emerald-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-income">+${(data.cashFlow / 100).toFixed(2)}</div>
+                        <div className="text-2xl font-bold text-emerald-500">+${(data.cashFlow / 100).toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground">
                             In: ${(data.monthIncome / 100).toFixed(2)} | Out: ${(data.monthExpenses / 100).toFixed(2)}
                         </p>
@@ -131,10 +169,10 @@ export default async function DashboardPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Tax Burden (YTD)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-expense" />
+                        <DollarSign className="h-4 w-4 text-red-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-expense">
+                        <div className="text-2xl font-bold text-red-500">
                             ${(data.taxesYTD / 100).toFixed(2)}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
@@ -150,9 +188,7 @@ export default async function DashboardPage() {
                         <CardTitle>Overview</CardTitle>
                     </CardHeader>
                     <CardContent className="pl-2">
-                        <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                            Chart Placeholder (Need Recharts Implementation)
-                        </div>
+                        <OverviewChart data={data.overviewData} />
                     </CardContent>
                 </Card>
 

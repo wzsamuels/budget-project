@@ -37,9 +37,12 @@ import {
     ReferenceLine
 } from "recharts";
 import { toast } from "sonner";
+import { parsePaystub } from "@/actions/upload-paystub";
+import { Loader2, UploadCloud } from "lucide-react";
 
 export function PaycheckForm() {
     const [isPending, setIsPending] = useState(false);
+    const [isParsing, setIsParsing] = useState(false);
 
     const form = useForm<PaycheckFormValues>({
         resolver: zodResolver(paycheckFormSchema),
@@ -50,7 +53,7 @@ export function PaycheckForm() {
         },
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, replace } = useFieldArray({
         control: form.control,
         name: "deductions",
     });
@@ -89,10 +92,72 @@ export function PaycheckForm() {
         }
     }
 
+    async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsParsing(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const result = await parsePaystub(formData);
+            if (result.success && result.data) {
+                const { data } = result;
+
+                if (data.grossAmount) form.setValue("grossAmount", data.grossAmount);
+                if (data.payDate) form.setValue("payDate", new Date(data.payDate)); // Ensure date object
+                if (data.employerName) form.setValue("employerName", data.employerName);
+
+                if (data.deductions && data.deductions.length > 0) {
+                    // Replace existing deductions or append? Let's replace to be clean if it's a fresh import
+                    // But mapping types correctly is key.
+                    replace(data.deductions as any);
+                    toast.success("Paystub parsed successfully!");
+                } else {
+                    toast.info("Parsed basic info, but found no deductions. Please add manually.");
+                }
+            } else {
+                toast.error(result.error || "Failed to parse paystub");
+            }
+        } catch (err) {
+            toast.error("Something went wrong parsing the file");
+        } finally {
+            setIsParsing(false);
+            // Reset input
+            e.target.value = "";
+        }
+    }
+
     return (
         <div className="grid lg:grid-cols-2 gap-8">
             {/* Left Column: Form */}
             <div className="space-y-6">
+                {/* Upload Card */}
+                <Card className="border-dashed border-2 bg-muted/20">
+                    <CardContent className="pt-6 flex flex-col items-center justify-center text-center">
+                        <div className="p-3 bg-background rounded-full mb-3 shadow-sm">
+                            {isParsing ? <Loader2 className="h-6 w-6 animate-spin text-primary" /> : <UploadCloud className="h-6 w-6 text-primary" />}
+                        </div>
+                        <h3 className="font-semibold mb-1">Auto-fill from Paystub</h3>
+                        <p className="text-sm text-muted-foreground mb-4 max-w-xs">
+                            Upload a PDF paystub to automatically extract gross pay, taxes, and deductions.
+                        </p>
+                        <div className="relative">
+                            <Button variant="outline" disabled={isParsing}>
+                                {isParsing ? "Analyzing..." : "Select PDF"}
+                            </Button>
+                            <Input
+                                type="file"
+                                accept="application/pdf"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={onFileChange}
+                                disabled={isParsing}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                         <Card>

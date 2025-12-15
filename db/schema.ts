@@ -9,6 +9,7 @@ import {
     uuid,
     date,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // Enums
 export const deductionCategoryEnum = pgEnum("deduction_category", [
@@ -60,8 +61,8 @@ export const accounts = pgTable(
     },
     (account) => [
         {
-            compoundKey: [account.provider, account.providerAccountId],
-        },
+            compoundKey: [account.provider, account.providerAccountId]
+        }
     ]
 );
 
@@ -82,8 +83,8 @@ export const verificationTokens = pgTable(
     },
     (verificationToken) => [
         {
-            compoundKey: [verificationToken.identifier, verificationToken.token],
-        },
+            compoundKey: [verificationToken.identifier, verificationToken.token]
+        }
     ]
 );
 
@@ -104,6 +105,10 @@ export const paychecks = pgTable("paychecks", {
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const paychecksRelations = relations(paychecks, ({ many }) => ({
+    deductions: many(paycheckDeductions),
+}));
+
 export const paycheckDeductions = pgTable("paycheck_deductions", {
     id: text("id")
         .primaryKey()
@@ -118,6 +123,13 @@ export const paycheckDeductions = pgTable("paycheck_deductions", {
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const paycheckDeductionsRelations = relations(paycheckDeductions, ({ one }) => ({
+    paycheck: one(paychecks, {
+        fields: [paycheckDeductions.paycheckId],
+        references: [paychecks.id],
+    }),
+}));
 
 export const budgetCategories = pgTable("budget_categories", {
     id: text("id")
@@ -148,7 +160,6 @@ export const transactions = pgTable("transactions", {
     description: text("description").notNull(),
     type: transactionTypeEnum("type").notNull(),
     isRecurring: boolean("is_recurring").default(false).notNull(),
-    // For split transactions, you might reference a parent transaction, but sticking to simple for now as per schema
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -163,6 +174,30 @@ export const savingsPots = pgTable("savings_pots", {
     name: text("name").notNull(), // e.g., "Emergency Fund"
     currentBalance: integer("current_balance").notNull().default(0), // stored in cents
     goalAmount: integer("goal_amount"), // stored in cents
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const recurringFrequencyEnum = pgEnum("recurring_frequency", [
+    "MONTHLY",
+    "YEARLY",
+]);
+
+export const recurringExpenses = pgTable("recurring_expenses", {
+    id: text("id")
+        .primaryKey()
+        .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: text("category_id").references(() => budgetCategories.id, {
+        onDelete: "set null",
+    }),
+    amount: integer("amount").notNull(), // stored in cents
+    description: text("description").notNull(),
+    frequency: recurringFrequencyEnum("frequency").notNull(),
+    nextDueDate: date("next_due_date").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

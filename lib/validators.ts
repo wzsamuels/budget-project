@@ -19,7 +19,7 @@ export const transactionTypes = ["INCOME", "EXPENSE"] as const;
 
 export const paycheckFormSchema = z.object({
     employerName: z.string().min(1, "Employer name is required"),
-    payDate: z.date({ required_error: "Pay date is required" }),
+    payDate: z.date({ message: "Pay date is required" }),
     grossAmount: z.coerce.number().min(0.01, "Gross amount must be positive"),
     deductions: z.array(
         z.object({
@@ -32,3 +32,25 @@ export const paycheckFormSchema = z.object({
 });
 
 export type PaycheckFormValues = z.infer<typeof paycheckFormSchema>;
+
+export const recurringFrequencies = ["MONTHLY", "YEARLY"] as const;
+
+export const addExpenseSchema = z.object({
+    description: z.string().min(1, "Description is required"),
+    amount: z.coerce.number().min(0.01, "Amount must be positive"),
+    date: z.date({ message: "Date is required" }),
+    categoryId: z.string().min(1, "Category is required"),
+    isRecurring: z.boolean().default(false),
+});
+
+export type AddExpenseFormValues = z.infer<typeof addExpenseSchema>;
+
+export const addRecurringExpenseSchema = z.object({
+    description: z.string().min(1, "Description is required"),
+    amount: z.coerce.number().min(0.01, "Amount must be positive"),
+    frequency: z.enum(recurringFrequencies),
+    startDate: z.date({ message: "Start Date is required" }),
+    categoryId: z.string().min(1, "Category is required"),
+});
+
+export type AddRecurringExpenseFormValues = z.infer<typeof addRecurringExpenseSchema>;
