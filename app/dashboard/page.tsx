@@ -2,7 +2,8 @@
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { paychecks, paycheckDeductions, transactions, budgetCategories } from "@/db/schema";
-import { eq, and, gte, lte, sum, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sum, sql, desc } from "drizzle-orm";
+import { ProjectPaycheckDialog } from "@/components/dashboard/project-paycheck-dialog";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -24,7 +25,8 @@ async function getDashboardData(userId: string) {
         ),
         with: {
             deductions: true
-        }
+        },
+        orderBy: [desc(paychecks.payDate)]
     });
 
     const grossIncomeYTD = paychecksYTD.reduce((acc, p) => acc + p.grossAmount, 0);
@@ -118,7 +120,8 @@ async function getDashboardData(userId: string) {
         monthIncome,
         monthExpenses,
         cashFlow,
-        overviewData: monthlyData
+        overviewData: monthlyData,
+        recentPaychecks: paychecksYTD.slice(0, 10)
     };
 }
 
@@ -197,10 +200,40 @@ export default async function DashboardPage() {
                         <CardTitle>Recent Paychecks</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {/* List recent paychecks */}
                         <div className="space-y-4">
-                            {/* This would map over recent paychecks */}
-                            <div className="text-sm text-muted-foreground">No recent activity.</div>
+                            {/* We just use the fetched YTD paychecks, sorted desc by default query? No, we need to ensure sort. */}
+                            {/* Assuming paychecksYTD is passed to the component or available in data object. It was used for calc but not returned explicitly. Let's return recentPaychecks. */}
+                            {data.recentPaychecks.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">No recent activity.</div>
+                            ) : (
+                                data.recentPaychecks.map((paycheck) => (
+                                    <div key={paycheck.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                        <div>
+                                            <div className="font-medium flex items-center gap-2">
+                                                {paycheck.employerName}
+                                                {paycheck.isProjected && (
+                                                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">Est</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {format(new Date(paycheck.payDate), "MMM d, yyyy")}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="font-bold">
+                                                ${(paycheck.netAmount / 100).toFixed(2)}
+                                            </div>
+                                            {!paycheck.isProjected && (
+                                                <ProjectPaycheckDialog
+                                                    paycheckId={paycheck.id}
+                                                    employerName={paycheck.employerName}
+                                                    payDate={paycheck.payDate}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>

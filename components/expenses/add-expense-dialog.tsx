@@ -60,7 +60,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
 
     // One-time Expense Form
     const expenseForm = useForm<z.infer<typeof addExpenseSchema>>({
-        resolver: zodResolver(addExpenseSchema),
+        resolver: zodResolver(addExpenseSchema) as any,
         defaultValues: {
             description: "",
             amount: 0,
@@ -71,7 +71,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
 
     // Recurring Expense Form
     const recurringForm = useForm<z.infer<typeof addRecurringExpenseSchema>>({
-        resolver: zodResolver(addRecurringExpenseSchema),
+        resolver: zodResolver(addRecurringExpenseSchema) as any,
         defaultValues: {
             description: "",
             amount: 0,

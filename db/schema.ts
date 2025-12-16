@@ -103,6 +103,7 @@ export const paychecks = pgTable("paychecks", {
     employerName: text("employer_name").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    isProjected: boolean("is_projected").default(false).notNull(),
 });
 
 export const paychecksRelations = relations(paychecks, ({ many }) => ({
@@ -163,6 +164,13 @@ export const transactions = pgTable("transactions", {
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+    category: one(budgetCategories, {
+        fields: [transactions.categoryId],
+        references: [budgetCategories.id],
+    }),
+}));
 
 export const savingsPots = pgTable("savings_pots", {
     id: text("id")

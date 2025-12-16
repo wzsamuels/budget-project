@@ -45,7 +45,7 @@ export function PaycheckForm() {
     const [isParsing, setIsParsing] = useState(false);
 
     const form = useForm<PaycheckFormValues>({
-        resolver: zodResolver(paycheckFormSchema),
+        resolver: zodResolver(paycheckFormSchema) as any,
         defaultValues: {
             employerName: "",
             grossAmount: 0,
@@ -59,7 +59,7 @@ export function PaycheckForm() {
     });
 
     const { watch } = form;
-    const grossAmount = watch("grossAmount") || 0;
+    const grossAmount = Number(watch("grossAmount") || 0);
     const deductions = watch("deductions") || [];
 
     const metrics = useMemo(() => {
@@ -342,7 +342,7 @@ export function PaycheckForm() {
                         <CardDescription>Real-time breakdown of your income</CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1 min-h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height={350}>
                             <BarChart data={chartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                                 <XAxis type="number" hide />
                                 <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
