@@ -38,7 +38,7 @@ export const recurringFrequencies = ["MONTHLY", "YEARLY"] as const;
 export const addExpenseSchema = z.object({
     description: z.string().min(1, "Description is required"),
     amount: z.coerce.number().min(0.01, "Amount must be positive"),
-    date: z.date({ message: "Date is required" }),
+    date: z.string().min(1, "Date is required"),
     categoryId: z.string().min(1, "Category is required"),
     isRecurring: z.boolean().default(false),
 });
@@ -49,8 +49,15 @@ export const addRecurringExpenseSchema = z.object({
     description: z.string().min(1, "Description is required"),
     amount: z.coerce.number().min(0.01, "Amount must be positive"),
     frequency: z.enum(recurringFrequencies),
-    startDate: z.date({ message: "Start Date is required" }),
+    startDate: z.string().min(1, "Start Date is required"),
+    endDate: z.string().optional(),
     categoryId: z.string().min(1, "Category is required"),
 });
 
 export type AddRecurringExpenseFormValues = z.infer<typeof addRecurringExpenseSchema>;
+
+export const editTransactionSchema = addExpenseSchema;
+export type EditTransactionFormValues = z.infer<typeof editTransactionSchema>;
+
+export const editRecurringExpenseSchema = addRecurringExpenseSchema;
+export type EditRecurringExpenseFormValues = z.infer<typeof editRecurringExpenseSchema>;

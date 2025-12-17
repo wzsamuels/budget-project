@@ -205,6 +205,8 @@ export const recurringExpenses = pgTable("recurring_expenses", {
     description: text("description").notNull(),
     frequency: recurringFrequencyEnum("frequency").notNull(),
     nextDueDate: date("next_due_date").notNull(),
+    startDate: date("start_date").notNull().defaultNow(),
+    endDate: date("end_date"),
     isActive: boolean("is_active").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -4,48 +4,45 @@ import { transactions, recurringExpenses, budgetCategories } from "@/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { AddExpenseDialog } from "@/components/expenses/add-expense-dialog";
+import { EditTransactionDialog } from "@/components/expenses/edit-transaction-dialog";
+import { EditRecurringExpenseDialog } from "@/components/expenses/edit-recurring-expense-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 
 async function getExpensesData(userId: string) {
-    const categories = await db.query.budgetCategories.findMany({
-        where: eq(budgetCategories.userId, userId),
-    });
+    try {
+        const categories = await db.query.budgetCategories.findMany({
+            where: eq(budgetCategories.userId, userId),
+        });
 
-    const recentExpenses = await db.query.transactions.findMany({
-        where: and(
-            eq(transactions.userId, userId),
-            eq(transactions.type, "EXPENSE")
-        ),
-        orderBy: [desc(transactions.date)],
-        limit: 10,
-        with: {
-            category: true // Assuming valid relation but schema didn't explicit define relations on transaction yet?
-        }
-    });
+        const recentExpenses = await db.query.transactions.findMany({
+            where: and(
+                eq(transactions.userId, userId),
+                eq(transactions.type, "EXPENSE")
+            ),
+            orderBy: [desc(transactions.date)],
+            limit: 10,
+            with: {
+                category: true
+            }
+        });
 
-    // We can't use 'with' if relations aren't defined in schema.ts relations object.
-    // Let's check schema relations.
-    // schema.ts had `transactions` table but I didn't see `transactionsRelations`.
-    // I will fetch categories manually map them if relations missing,
-    // or just list them.
-    // Let's assume relations are missing and just show data. Using categoryId match if needed.
+        const activeRecurring = await db.query.recurringExpenses.findMany({
+            where: and(
+                eq(recurringExpenses.userId, userId),
+                eq(recurringExpenses.isActive, true)
+            )
+        });
 
-    // Actually, let's fix relations in schema if meaningful, but for now I'll just map in JS if needed.
-    // But `with` will fail if not defined.
-
-    const activeRecurring = await db.query.recurringExpenses.findMany({
-        where: and(
-            eq(recurringExpenses.userId, userId),
-            eq(recurringExpenses.isActive, true)
-        )
-    });
-
-    return {
-        categories: categories.map(c => ({ id: c.id, name: c.name })),
-        recentExpenses,
-        activeRecurring
-    };
+        return {
+            categories: categories.map(c => ({ id: c.id, name: c.name })),
+            recentExpenses,
+            activeRecurring
+        };
+    } catch (error) {
+        console.error("Error in getExpensesData:", error);
+        throw error;
+    }
 }
 
 import { SeedCategoriesButton } from "@/components/expenses/seed-categories-button";
@@ -88,11 +85,17 @@ export default async function ExpensesPage() {
                                             <div>
                                                 <div className="font-medium">{expense.description}</div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    {expense.frequency} • Next: {format(new Date(expense.nextDueDate), "MMM d, yyyy")}
+                                                    {expense.frequency} • Next: {(() => {
+                                                        const [y, m, d] = expense.nextDueDate.split('-').map(Number);
+                                                        return format(new Date(y, m - 1, d), "MMM d, yyyy");
+                                                    })()}
                                                 </div>
                                             </div>
-                                            <div className="font-bold">
-                                                ${(expense.amount / 100).toFixed(2)}
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-bold">
+                                                    ${(expense.amount / 100).toFixed(2)}
+                                                </div>
+                                                <EditRecurringExpenseDialog expense={expense} categories={data.categories} />
                                             </div>
                                         </div>
                                     ))}
@@ -116,11 +119,17 @@ export default async function ExpensesPage() {
                                             <div>
                                                 <div className="font-medium">{tx.description}</div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    {format(new Date(tx.date), "MMM d")} • {categoryMap.get(tx.categoryId || "") || "Uncategorized"}
+                                                    {(() => {
+                                                        const [y, m, d] = tx.date.split('-').map(Number);
+                                                        return format(new Date(y, m - 1, d), "MMM d");
+                                                    })()} • {categoryMap.get(tx.categoryId || "") || "Uncategorized"}
                                                 </div>
                                             </div>
-                                            <div className="font-bold text-red-500">
-                                                -${(tx.amount / 100).toFixed(2)}
+                                            <div className="flex items-center gap-3">
+                                                <div className="font-bold text-red-500">
+                                                    -${(tx.amount / 100).toFixed(2)}
+                                                </div>
+                                                <EditTransactionDialog transaction={tx} categories={data.categories} />
                                             </div>
                                         </div>
                                     ))}

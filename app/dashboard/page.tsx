@@ -1,13 +1,13 @@
 
 import { auth } from "@/auth";
 import { db } from "@/db";
-import { paychecks, paycheckDeductions, transactions, budgetCategories } from "@/db/schema";
+import { paychecks, paycheckDeductions, transactions, budgetCategories, recurringExpenses } from "@/db/schema";
 import { eq, and, gte, lte, sum, sql, desc } from "drizzle-orm";
 import { ProjectPaycheckDialog } from "@/components/dashboard/project-paycheck-dialog";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { format } from "date-fns";
+import { format, addMonths, addYears } from "date-fns";
 import { DollarSign, Percent, TrendingUp, TrendingDown } from "lucide-react";
 import { OverviewChart } from "@/components/dashboard/overview-chart";
 
@@ -111,12 +111,129 @@ async function getDashboardData(userId: string) {
         }
     });
 
+    // Fetch Recurring Expenses
+    const activeRecurring = await db.query.recurringExpenses.findMany({
+        where: and(
+            eq(recurringExpenses.userId, userId),
+            eq(recurringExpenses.isActive, true)
+        )
+    });
+
+    // Project Recurring Expenses
+    const today = new Date();
+
+    activeRecurring.forEach(expense => {
+        let currentDate = new Date(expense.nextDueDate);
+        // If start date is before this year, move it to first occurrence of this year?
+        // Logic: If recurrence started in 2023, we need to find the first occurrence in 2024.
+        // Simple approx: while current < startOfYear, add frequency.
+
+        while (currentDate < startOfYear) {
+            if (expense.frequency === 'MONTHLY') {
+                currentDate = addMonths(currentDate, 1);
+            } else if (expense.frequency === 'YEARLY') {
+                currentDate = addYears(currentDate, 1);
+            }
+        }
+
+        while (currentDate <= endOfMonth) { // Wait, endOfMonth is just THIS month's end. We want end of YEAR.
+            // But monthlyData is 12 months. Let's project for whole year.
+            const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+
+            if (currentDate > endOfYear) break;
+
+            const month = currentDate.getMonth();
+            const amount = expense.amount / 100; // cents to dollars
+
+            // Add to Graph Data (Whole Year Projection)
+            monthlyData[month].expense += amount;
+
+            // Add to YTD Totals (Only if <= Today)
+            if (currentDate <= today) {
+                // expensesYTD is calculated by reduce later. We need to add to a running total or intermediate.
+                // But wait, "expensesYTD" variable below sums `monthlyData`. 
+                // If I add to monthlyData here, expensesYTD will include FUTURE recurring expenses if I sum all months.
+                // Correct logic: expensesYTD should only sum monthlyData cols that are past? 
+                // OR: I track YTD explicitly.
+
+                // Let's rely on specific addition.
+                // We should add to monthlyData for the graph.
+
+                // For the "Expenses (YTD)" CARD, we need a separate accumulator if monthlyData contains future.
+                // Previously: const expensesYTD = monthlyData.reduce((acc, m) => acc + m.expense, 0);
+                // This sums EVERYTHING in monthlyData. 
+                // If I put future recurring expenses in monthlyData, expensesYTD will be wrong (it will be "Expenses Projected for Year").
+
+                // Fix: Calculate expensesYTD separately or allow it to be "Projected Annual Spend"?
+                // The card says "Expenses (YTD)".
+
+                // Let's modify expensesYTD calculation to only sum up to current month?
+                // Or better, accumulate `recurringYTD` separately here.
+            }
+
+            if (expense.frequency === 'MONTHLY') {
+                currentDate = addMonths(currentDate, 1);
+            } else if (expense.frequency === 'YEARLY') {
+                currentDate = addYears(currentDate, 1);
+            }
+        }
+    });
+
+    // Recalculate expensesYTD correctly:
+    // Transactions YTD + Recurring YTD.
+    // monthlyData now mixes Transactions (YTD) + Recurring (Year).
+    // This makes `monthlyData.reduce` invalid for YTD.
+
+    // Let's refine. monthlyData should reflect "What happened or will happen".
+
+    // Let's use loop to calc YTD components.
+    let recurringYTD = 0;
+
+    // Resetting projection loop for clean logic
+    activeRecurring.forEach(expense => {
+        let currentDate = new Date(expense.nextDueDate);
+        while (currentDate < startOfYear) {
+            if (expense.frequency === 'MONTHLY') currentDate = addMonths(currentDate, 1);
+            else if (expense.frequency === 'YEARLY') currentDate = addYears(currentDate, 1);
+        }
+
+        const endOfYear = new Date(new Date().getFullYear(), 11, 31);
+
+        while (currentDate <= endOfYear) {
+            const month = currentDate.getMonth();
+            const amount = expense.amount / 100;
+
+            // Add to Monthly Data (Graph)
+            monthlyData[month].expense += amount;
+
+            // Add to YTD (Card)
+            if (currentDate <= today) {
+                recurringYTD += amount;
+
+                // Add to Month specific (Card)
+                if (currentDate >= startOfMonth && currentDate <= endOfMonth) {
+                    monthExpenses += expense.amount; // Keep in cents for consistency
+                }
+            }
+
+            if (expense.frequency === 'MONTHLY') currentDate = addMonths(currentDate, 1);
+            else if (expense.frequency === 'YEARLY') currentDate = addYears(currentDate, 1);
+        }
+    });
+
+    // Transactions YTD (already fetched)
+    const transactionsTotalYTD = transactionsYTD.reduce((acc, t) => t.type === 'EXPENSE' ? acc + (t.amount / 100) : acc, 0);
+
+    const expensesYTD = transactionsTotalYTD + recurringYTD;
+
     const cashFlow = monthIncome - monthExpenses;
+
 
     return {
         grossIncomeYTD,
         taxesYTD,
         savingsRate,
+        expensesYTD,
         monthIncome,
         monthExpenses,
         cashFlow,
@@ -141,7 +258,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Header Cards */}
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Cash Flow (Month)</CardTitle>
@@ -181,6 +298,21 @@ export default async function DashboardPage() {
                         <div className="text-xs text-muted-foreground mt-1">
                             Effective Rate: {data.grossIncomeYTD ? ((data.taxesYTD / data.grossIncomeYTD) * 100).toFixed(1) : 0}%
                         </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Expenses (YTD)</CardTitle>
+                        <TrendingDown className="h-4 w-4 text-red-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-red-500">
+                            ${(data.expensesYTD).toFixed(2)}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Total spending this year
+                        </p>
                     </CardContent>
                 </Card>
             </div>

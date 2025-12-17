@@ -66,6 +66,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
             amount: 0,
             categoryId: "",
             isRecurring: false,
+            date: "",
         },
     });
 
@@ -77,6 +78,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
             amount: 0,
             frequency: "MONTHLY",
             categoryId: "",
+            startDate: "",
         },
     });
 
@@ -192,7 +194,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
                                                             )}
                                                         >
                                                             {field.value ? (
-                                                                format(field.value, "PPP")
+                                                                format(new Date(field.value + "T12:00:00"), "PPP")
                                                             ) : (
                                                                 <span>Pick a date</span>
                                                             )}
@@ -203,8 +205,8 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
                                                 <PopoverContent className="w-auto p-0" align="start">
                                                     <Calendar
                                                         mode="single"
-                                                        selected={field.value}
-                                                        onSelect={field.onChange}
+                                                        selected={field.value ? new Date(field.value + "T12:00:00") : undefined}
+                                                        onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : "")}
                                                         disabled={(date) =>
                                                             date > new Date() || date < new Date("1900-01-01")
                                                         }
@@ -315,7 +317,7 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
                                                             )}
                                                         >
                                                             {field.value ? (
-                                                                format(field.value, "PPP")
+                                                                format(new Date(field.value + "T12:00:00"), "PPP")
                                                             ) : (
                                                                 <span>Pick a date</span>
                                                             )}
@@ -326,8 +328,8 @@ export function AddExpenseDialog({ categories }: AddExpenseDialogProps) {
                                                 <PopoverContent className="w-auto p-0" align="start">
                                                     <Calendar
                                                         mode="single"
-                                                        selected={field.value}
-                                                        onSelect={field.onChange}
+                                                        selected={field.value ? new Date(field.value + "T12:00:00") : undefined}
+                                                        onSelect={(date) => field.onChange(date ? format(date, "yyyy-MM-dd") : "")}
                                                         disabled={(date) =>
                                                             date < new Date("1900-01-01")
                                                         }
