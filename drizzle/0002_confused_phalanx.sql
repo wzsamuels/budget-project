@@ -1,0 +1,2 @@
+ALTER TABLE "transactions" ADD COLUMN "recurring_rule_id" text;--> statement-breakpoint
+ALTER TABLE "transactions" ADD CONSTRAINT "transactions_recurring_rule_id_recurring_expenses_id_fk" FOREIGN KEY ("recurring_rule_id") REFERENCES "public"."recurring_expenses"("id") ON DELETE set null ON UPDATE no action;

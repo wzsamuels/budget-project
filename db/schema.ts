@@ -156,6 +156,9 @@ export const transactions = pgTable("transactions", {
     categoryId: text("category_id").references(() => budgetCategories.id, {
         onDelete: "set null",
     }),
+    recurringRuleId: text("recurring_rule_id").references(() => recurringExpenses.id, {
+        onDelete: "set null",
+    }),
     amount: integer("amount").notNull(), // stored in cents
     date: date("date").notNull(),
     description: text("description").notNull(),
@@ -164,13 +167,6 @@ export const transactions = pgTable("transactions", {
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
-
-export const transactionsRelations = relations(transactions, ({ one }) => ({
-    category: one(budgetCategories, {
-        fields: [transactions.categoryId],
-        references: [budgetCategories.id],
-    }),
-}));
 
 export const savingsPots = pgTable("savings_pots", {
     id: text("id")
@@ -211,3 +207,19 @@ export const recurringExpenses = pgTable("recurring_expenses", {
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Relations defined after all tables to allow circular references
+export const transactionsRelations = relations(transactions, ({ one }) => ({
+    category: one(budgetCategories, {
+        fields: [transactions.categoryId],
+        references: [budgetCategories.id],
+    }),
+    recurringRule: one(recurringExpenses, {
+        fields: [transactions.recurringRuleId],
+        references: [recurringExpenses.id],
+    }),
+}));
+
+export const recurringExpensesRelations = relations(recurringExpenses, ({ many }) => ({
+    transactions: many(transactions),
+}));

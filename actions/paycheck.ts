@@ -1,6 +1,6 @@
-
 "use server";
 
+import { and } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import { paychecks, paycheckDeductions } from "@/db/schema";
@@ -61,6 +61,96 @@ export async function createPaycheck(data: z.infer<typeof paycheckFormSchema>) {
 
     revalidatePath("/dashboard");
     redirect("/dashboard");
+}
+
+export async function updatePaycheck(id: string, data: z.infer<typeof paycheckFormSchema>) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        throw new Error("Unauthorized");
+    }
+
+    const validated = paycheckFormSchema.safeParse(data);
+    if (!validated.success) {
+        return { error: "Invalid data" };
+    }
+
+    // Verify ownership
+    const existing = await db.query.paychecks.findFirst({
+        where: and(eq(paychecks.id, id), eq(paychecks.userId, userId))
+    });
+
+    if (!existing) {
+        throw new Error("Paycheck not found");
+    }
+
+    const { grossAmount, deductions, employerName, payDate } = validated.data;
+
+    // Convert dollars to cents
+    const grossCents = Math.round(grossAmount * 100);
+
+    const totalDeductionsCents = deductions.reduce(
+        (acc, d) => acc + Math.round(d.amount * 100),
+        0
+    );
+
+    const netCents = grossCents - totalDeductionsCents;
+
+    await db.transaction(async (tx) => {
+        // Update Paycheck
+        await tx
+            .update(paychecks)
+            .set({
+                payDate: payDate.toISOString().split("T")[0],
+                grossAmount: grossCents,
+                netAmount: netCents,
+                employerName,
+                updatedAt: new Date(),
+            })
+            .where(eq(paychecks.id, id));
+
+        // Replace Deductions (Delete all, then insert new)
+        await tx.delete(paycheckDeductions).where(eq(paycheckDeductions.paycheckId, id));
+
+        if (deductions.length > 0) {
+            await tx.insert(paycheckDeductions).values(
+                deductions.map((d) => ({
+                    paycheckId: id,
+                    name: d.name,
+                    amount: Math.round(d.amount * 100),
+                    category: d.category,
+                    isPreTax: d.isPreTax,
+                }))
+            );
+        }
+    });
+
+    revalidatePath("/dashboard");
+    redirect("/dashboard");
+}
+
+export async function deletePaycheck(id: string) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        throw new Error("Unauthorized");
+    }
+
+    // Verify ownership
+    const existing = await db.query.paychecks.findFirst({
+        where: and(eq(paychecks.id, id), eq(paychecks.userId, userId))
+    });
+
+    if (!existing) {
+        throw new Error("Paycheck not found or unauthorized");
+    }
+
+    await db.delete(paychecks).where(eq(paychecks.id, id));
+
+    revalidatePath("/dashboard");
+    return { success: true };
 }
 
 import { addWeeks, addMonths, endOfMonth, setDate, isAfter, startOfDay } from "date-fns";

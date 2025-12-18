@@ -40,13 +40,21 @@ import { toast } from "sonner";
 import { parsePaystub } from "@/actions/upload-paystub";
 import { Loader2, UploadCloud } from "lucide-react";
 
-export function PaycheckForm() {
+interface PaycheckFormProps {
+
+    paycheckId?: string;
+    initialData?: PaycheckFormValues;
+}
+
+import { updatePaycheck } from "@/actions/paycheck";
+
+export function PaycheckForm({ paycheckId, initialData }: PaycheckFormProps) {
     const [isPending, setIsPending] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
 
     const form = useForm<PaycheckFormValues>({
         resolver: zodResolver(paycheckFormSchema) as any,
-        defaultValues: {
+        defaultValues: initialData || {
             employerName: "",
             grossAmount: 0,
             deductions: [],
@@ -83,8 +91,13 @@ export function PaycheckForm() {
     async function onSubmit(data: PaycheckFormValues) {
         setIsPending(true);
         try {
-            await createPaycheck(data);
-            toast.success("Paycheck saved successfully");
+            if (paycheckId) {
+                await updatePaycheck(paycheckId, data);
+                toast.success("Paycheck updated successfully");
+            } else {
+                await createPaycheck(data);
+                toast.success("Paycheck saved successfully");
+            }
         } catch (error) {
             toast.error("Failed to save paycheck");
         } finally {

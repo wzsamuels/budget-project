@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { AddExpenseDialog } from "@/components/expenses/add-expense-dialog";
 import { EditTransactionDialog } from "@/components/expenses/edit-transaction-dialog";
 import { EditRecurringExpenseDialog } from "@/components/expenses/edit-recurring-expense-dialog";
+import { MarkAsPaidDialog } from "@/components/expenses/mark-paid-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
 
@@ -95,6 +96,7 @@ export default async function ExpensesPage() {
                                                 <div className="font-bold">
                                                     ${(expense.amount / 100).toFixed(2)}
                                                 </div>
+                                                <MarkAsPaidDialog expense={expense} categories={data.categories} />
                                                 <EditRecurringExpenseDialog expense={expense} categories={data.categories} />
                                             </div>
                                         </div>

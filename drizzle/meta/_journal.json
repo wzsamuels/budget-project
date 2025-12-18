@@ -15,6 +15,13 @@
       "when": 1765988326182,
       "tag": "0001_violet_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1765997360557,
+      "tag": "0002_confused_phalanx",
+      "breakpoints": true
     }
   ]
 }

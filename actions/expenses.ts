@@ -9,6 +9,7 @@ import { addExpenseSchema, addRecurringExpenseSchema, AddExpenseFormValues, AddR
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod";
 
 export async function addExpense(data: AddExpenseFormValues) {
     const session = await auth();
@@ -295,5 +296,66 @@ export async function seedBudgetCategories() {
     } catch (error) {
         console.error("Failed to seed categories:", error);
         return { success: false };
+    }
+}
+// ... existing code ...
+
+export async function markRecurringExpenseAsPaid(
+    recurringRuleId: string,
+    values: z.infer<typeof addExpenseSchema>
+) {
+    const session = await auth();
+    if (!session?.user?.id) {
+        return { success: false, error: "Unauthorized" };
+    }
+
+    try {
+        const expenseRule = await db.query.recurringExpenses.findFirst({
+            where: and(
+                eq(recurringExpenses.id, recurringRuleId),
+                eq(recurringExpenses.userId, session.user.id)
+            )
+        });
+
+        if (!expenseRule) {
+            return { success: false, error: "Recurring expense rule not found" };
+        }
+
+        // 1. Create the Transaction
+        await db.insert(transactions).values({
+            userId: session.user.id,
+            description: values.description,
+            amount: Math.round(values.amount * 100), // dollars to cents
+            categoryId: values.categoryId || null,
+            date: values.date, // "YYYY-MM-DD" string
+            type: "EXPENSE",
+            isRecurring: true,
+            recurringRuleId: recurringRuleId,
+        });
+
+        // 2. Advance the Next Due Date
+        // Construct UTC Date from string "YYYY-MM-DD"
+        let nextDate = new Date(expenseRule.nextDueDate + "T00:00:00Z");
+
+        if (expenseRule.frequency === "MONTHLY") {
+            nextDate = addMonths(nextDate, 1);
+        } else if (expenseRule.frequency === "YEARLY") {
+            nextDate = addYears(nextDate, 1);
+        }
+
+        await db.update(recurringExpenses)
+            .set({
+                nextDueDate: nextDate.toISOString().split("T")[0],
+                updatedAt: new Date()
+            })
+            .where(eq(recurringExpenses.id, recurringRuleId));
+
+        revalidatePath("/dashboard/expenses");
+        revalidatePath("/dashboard");
+        return { success: true };
+
+    } catch (error) {
+        console.error("Failed to mark recurring expense as paid:", error);
+        return { success: false, error: "Failed to process payment" };
     }
 }

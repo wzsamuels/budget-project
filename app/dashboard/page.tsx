@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { format, addMonths, addYears } from "date-fns";
 import { DollarSign, Percent, TrendingUp, TrendingDown } from "lucide-react";
 import { OverviewChart } from "@/components/dashboard/overview-chart";
+import { PaycheckActionsMenu } from "@/components/dashboard/paycheck-actions-menu";
 
 async function getDashboardData(userId: string) {
     const now = new Date();
@@ -356,11 +357,14 @@ export default async function DashboardPage() {
                                                 ${(paycheck.netAmount / 100).toFixed(2)}
                                             </div>
                                             {!paycheck.isProjected && (
-                                                <ProjectPaycheckDialog
-                                                    paycheckId={paycheck.id}
-                                                    employerName={paycheck.employerName}
-                                                    payDate={paycheck.payDate}
-                                                />
+                                                <div className="flex items-center">
+                                                    <ProjectPaycheckDialog
+                                                        paycheckId={paycheck.id}
+                                                        employerName={paycheck.employerName}
+                                                        payDate={paycheck.payDate}
+                                                    />
+                                                    <PaycheckActionsMenu paycheckId={paycheck.id} />
+                                                </div>
                                             )}
                                         </div>
                                     </div>
